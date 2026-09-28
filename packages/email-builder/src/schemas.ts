@@ -29,6 +29,7 @@ const image = z.object({
     href: url.optional(),
     align: align.optional(),
     fullWidth: z.boolean().optional(),
+    sourceProductId: z.string().max(500).optional(),
   }).passthrough(),
 });
 
@@ -43,6 +44,9 @@ const button = z.object({
     borderRadius: z.number().min(0).max(100).optional(),
     align: align.optional(),
     fullWidth: z.boolean().optional(),
+    fontSize: z.number().min(10).max(48).optional(),
+    paddingX: z.number().min(0).max(80).optional(),
+    paddingY: z.number().min(0).max(80).optional(),
   }).passthrough(),
 });
 

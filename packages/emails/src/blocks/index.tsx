@@ -146,25 +146,28 @@ function PrimaryButton({
   bk,
   href,
   children,
+  appearance,
 }: {
   bk: BrandKit;
   href: string;
   children: React.ReactNode;
+  appearance?: Extract<EmailBlock, { type: "button" }>["props"];
 }) {
   return (
     <Button
       href={href}
       style={{
-        backgroundColor: bk.colors.primary,
-        color: bk.colors.onPrimary,
+        backgroundColor: appearance?.bgColor ?? bk.colors.primary,
+        color: appearance?.textColor ?? bk.colors.onPrimary,
         fontFamily: bk.fonts.sans,
-        fontSize: 15,
+        fontSize: appearance?.fontSize ?? 15,
         fontWeight: 600,
         letterSpacing: "0.01em",
         textDecoration: "none",
-        borderRadius: bk.radius.button,
-        padding: "14px 26px",
-        display: "inline-block",
+        borderRadius: appearance?.borderRadius ?? bk.radius.button,
+        padding: `${appearance?.paddingY ?? 14}px ${appearance?.paddingX ?? 26}px`,
+        display: appearance?.fullWidth ? "block" : "inline-block",
+        ...(appearance?.fullWidth ? { width: "100%", boxSizing: "border-box", textAlign: "center" } as const : {}),
       }}
     >
       {children}
@@ -244,22 +247,22 @@ function ButtonBlockView({
   const ta = alignToText(block.props.align ?? "left");
   return (
     <Section className="bk-pad" style={{ padding: "24px 36px 0", textAlign: ta }}>
-      <PrimaryButton bk={bk} href={interpolate(block.props.href || "#", variables)}>
+      <PrimaryButton bk={bk} href={interpolate(block.props.href || "#", variables)} appearance={block.props}>
         {stripHtml(interpolate(block.props.text, variables))}
       </PrimaryButton>
     </Section>
   );
 }
 
-function DividerBlockView({ ctx }: { ctx: BlockRenderContext }) {
+function DividerBlockView({ ctx, block }: { ctx: BlockRenderContext; block: Extract<EmailBlock, { type: "divider" }> }) {
   const { brandKit: bk } = ctx;
   return (
-    <Section className="bk-pad" style={{ padding: "20px 36px 0" }}>
+    <Section className="bk-pad" style={{ padding: `${block.props.margin ?? 20}px 36px 0` }}>
       <Hr
         className="bk-line"
         style={{
-          borderColor: bk.colors.line,
-          borderTop: `1px solid ${bk.colors.line}`,
+          borderColor: block.props.color ?? bk.colors.line,
+          borderTop: `${block.props.thickness ?? 1}px solid ${block.props.color ?? bk.colors.line}`,
           margin: 0,
         }}
       />
@@ -805,7 +808,7 @@ export function renderBlock(block: EmailBlock, ctx: BlockRenderContext): React.R
     case "button":
       return <ButtonBlockView block={block} ctx={ctx} />;
     case "divider":
-      return <DividerBlockView ctx={ctx} />;
+      return <DividerBlockView ctx={ctx} block={block} />;
     case "spacer":
       return <SpacerBlockView block={block} />;
     case "product":

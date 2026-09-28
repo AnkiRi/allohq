@@ -46,6 +46,7 @@ function GeneratedEmailDocument({
   return (
     <BrandEmailLayout brandKit={brandKit} preview={preview}>
       {content.blocks.map((block, i) => {
+        if (block.type === "header" || block.type === "footer") return null;
         const rendered = renderBlock(block, ctx);
         return ctx.previewMode ? (
           <div

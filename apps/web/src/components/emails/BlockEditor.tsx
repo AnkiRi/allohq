@@ -9,9 +9,9 @@ import type { EmailBlock } from "@allohq/email-builder";
 
 function Label({ children }: { children: React.ReactNode }) {
   return (
-    <label className="block text-[10px] font-sans font-semibold text-muted-foreground uppercase tracking-[0.12em] mb-1">
+    <span className="block text-[12px] font-sans font-medium text-muted-foreground mb-1">
       {children}
-    </label>
+    </span>
   );
 }
 
@@ -135,7 +135,7 @@ function Checkbox({
 }
 
 function Field({ children }: { children: React.ReactNode }) {
-  return <div className="space-y-1">{children}</div>;
+  return <label className="block space-y-1">{children}</label>;
 }
 
 // ---------------------------------------------------------------------------
@@ -236,6 +236,10 @@ function ButtonEditor({ block, onUpdate }: { block: Extract<EmailBlock, { type: 
       <Field><Label>Button text</Label><TextInput value={block.props.text} onChange={(text) => set({ text })} /></Field>
       <Field><Label>Link URL</Label><TextInput value={block.props.href} onChange={(href) => set({ href })} mono placeholder="https://…" /></Field>
       <Field><Label>Align</Label><SelectInput value={block.props.align} onChange={(align) => set({ align })} options={ALIGN_OPTIONS} /></Field>
+      <Checkbox checked={block.props.fullWidth ?? false} onChange={(fullWidth) => set({ fullWidth })} label="Full email width" />
+      <Field><Label>Text size (px)</Label><NumberInput value={block.props.fontSize ?? 15} onChange={(fontSize) => set({ fontSize })} min={10} max={48} /></Field>
+      <Field><Label>Vertical padding (px)</Label><NumberInput value={block.props.paddingY ?? 14} onChange={(paddingY) => set({ paddingY })} min={0} max={80} /></Field>
+      <Field><Label>Horizontal padding (px)</Label><NumberInput value={block.props.paddingX ?? 26} onChange={(paddingX) => set({ paddingX })} min={0} max={80} /></Field>
     </>
   );
 }
@@ -368,7 +372,37 @@ function IconRowEditor({ block, onUpdate }: { block: Extract<EmailBlock, { type:
 
 function SpacerEditor({ block, onUpdate }: { block: Extract<EmailBlock, { type: "spacer" }>; onUpdate: (b: EmailBlock) => void }) {
   const set = useSet(block, onUpdate);
-  return <Field><Label>Height (px)</Label><NumberInput value={block.props.height} onChange={(height) => set({ height })} min={1} max={160} /></Field>;
+  return <><Field><Label>Height (px)</Label><NumberInput value={block.props.height} onChange={(height) => set({ height })} min={1} max={160} /></Field><button type="button" onClick={() => onUpdate({ id: block.id, type: "divider", props: { thickness: 1, margin: block.props.height } })} className="text-[13px] text-[#2D4F9E] underline underline-offset-2">Replace space with a divider</button></>;
+}
+
+function DividerEditor({ block, onUpdate }: { block: Extract<EmailBlock, { type: "divider" }>; onUpdate: (b: EmailBlock) => void }) {
+  const set = useSet(block, onUpdate);
+  return <>
+    <Field><Label>Line thickness (px)</Label><NumberInput value={block.props.thickness ?? 1} onChange={(thickness) => set({ thickness })} min={0} max={20} /></Field>
+    <Field><Label>Space above (px)</Label><NumberInput value={block.props.margin ?? 20} onChange={(margin) => set({ margin })} min={0} max={200} /></Field>
+    <Field><Label>Line colour</Label><TextInput value={block.props.color ?? ""} onChange={(color) => set({ color })} placeholder="Uses your brand divider colour" /></Field>
+    <button type="button" onClick={() => onUpdate({ id: block.id, type: "spacer", props: { height: block.props.margin ?? 20 } })} className="text-[13px] text-[#2D4F9E] underline underline-offset-2">Replace divider with empty space</button>
+  </>;
+}
+
+function CountdownEditor({ block, onUpdate }: { block: Extract<EmailBlock, { type: "countdown" }>; onUpdate: (b: EmailBlock) => void }) {
+  const set = useSet(block, onUpdate);
+  const date = new Date(block.props.endDate);
+  const localDate = Number.isFinite(date.getTime())
+    ? new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16) : "";
+  return <>
+    <Field><Label>Countdown label</Label><TextInput value={block.props.label} onChange={(label) => set({ label })} /></Field>
+    <Field><Label>Offer ends</Label><input type="datetime-local" value={localDate} className={inputCls} onChange={(event) => { const next = new Date(event.target.value); if (Number.isFinite(next.getTime())) set({ endDate: next.toISOString() }); }} /></Field>
+    <p className="text-[12px] leading-5 text-muted-foreground">Time is shown in your device’s timezone. The time remaining is text calculated when the email is rendered, not a live inbox timer. Keep the date aligned with the campaign’s offer.</p>
+  </>;
+}
+
+function SocialEditor({ block, onUpdate }: { block: Extract<EmailBlock, { type: "social" }>; onUpdate: (b: EmailBlock) => void }) {
+  const set = useSet(block, onUpdate);
+  return <>{block.props.links.map((link, index) => <div key={index} className="space-y-2">
+    <Field><Label>Platform</Label><TextInput value={link.platform} onChange={(platform) => set({ links: block.props.links.map((item, i) => i === index ? { ...item, platform } : item) })} /></Field>
+    <Field><Label>Social link</Label><TextInput value={link.url} onChange={(url) => set({ links: block.props.links.map((item, i) => i === index ? { ...item, url } : item) })} /></Field>
+  </div>)}<p className="text-[12px] text-muted-foreground">Your fixed footer uses the social links in Brand settings. This optional block is part of the email content.</p></>;
 }
 
 export function BlockEditor({
@@ -408,11 +442,14 @@ export function BlockEditor({
       case "testimonial": return <TestimonialEditor block={block} onUpdate={onUpdate} />;
       case "icon_row": return <IconRowEditor block={block} onUpdate={onUpdate} />;
       case "spacer": return <SpacerEditor block={block} onUpdate={onUpdate} />;
+      case "divider": return <DividerEditor block={block} onUpdate={onUpdate} />;
+      case "countdown": return <CountdownEditor block={block} onUpdate={onUpdate} />;
+      case "social": return <SocialEditor block={block} onUpdate={onUpdate} />;
       case "custom_html": return <CustomHtmlEditor block={block} onUpdate={onUpdate} />;
       default:
         return (
           <p className="text-[13px] font-sans text-muted-foreground">
-            This block has no inline properties. Reorder or delete it from the list.
+            This block is managed by your brand layout. Its settings are separate from the email content.
           </p>
         );
     }

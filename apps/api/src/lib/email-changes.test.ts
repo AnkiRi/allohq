@@ -211,6 +211,26 @@ test("presentation stays Joon's to change", () => {
   assert.deepEqual(result.stripped, [], "nothing factual was attempted");
 });
 
+test("unknown sizing properties cannot become a successful invisible suggestion", () => {
+  const result = planEmailChange({
+    content: JSON.stringify({ blocks: { cta: { width: "100%", size: "large", style: { padding: 40 } } } }),
+    scope: { kind: "block", blockId: "cta" },
+    original: [{ id: "cta", type: "button", props: { text: "Shop", href: "#" } }],
+    idSeed,
+  });
+  assert.equal(result.ok, false);
+});
+
+test("a spacer cannot acquire invisible divider properties", () => {
+  const result = planEmailChange({
+    content: JSON.stringify({ blocks: { space: { border: "1px solid black", type: "divider" } } }),
+    scope: { kind: "block", blockId: "space" },
+    original: [{ id: "space", type: "spacer", props: { height: 24 } }],
+    idSeed,
+  });
+  assert.equal(result.ok, false);
+});
+
 test("the refusal tells the merchant which picker to use", () => {
   const result = plan(JSON.stringify({ blocks: { b3: { price: 49 } } }), { kind: "document" });
   assert.equal(result.ok, false);

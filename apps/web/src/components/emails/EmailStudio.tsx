@@ -3,8 +3,8 @@
 import * as React from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import {
-  Check, Code2, ImagePlus, Loader2,
-  PanelLeft, PanelLeftClose, Plus, Send, Sparkles, X,
+  Check, Code2, Loader2,
+  PanelLeft, PanelLeftClose, Plus, Sparkles, X,
 } from "lucide-react";
 import { cn } from "@allohq/ui";
 import {
@@ -20,8 +20,10 @@ import { useIsDesktop } from "@/lib/use-breakpoint";
 import { bindProductToBlock } from "@/lib/product-binding";
 import { BlockList } from "./BlockList";
 import { StudioTopBar } from "./StudioTopBar";
-import { ScopeChooser, type AskScope } from "./AskScope";
-import { VisualProposalCard, type VisualProposal } from "./VisualProposalCard";
+import { type AskScope } from "./AskScope";
+import { type VisualProposal } from "./VisualProposalCard";
+import { AskPanel, type ProposalHistoryItem } from "./StudioAskPanel";
+import { VersionsPanel, type DurableVersion } from "./StudioVersions";
 import { ShopifyDataPanel } from "./ShopifyDataPanel";
 import { VisualGenerator, type GeneratedVisual, type VisualFailure, type VisualMode, type VisualSlotDraft } from "./VisualGenerator";
 import { VisualActions } from "./VisualActions";
@@ -31,13 +33,12 @@ import { placeUploadedImage } from "./upload-placement";
 import { placeProposalVisual } from "./visual-proposal-placement";
 import { proposalPreviewState } from "./proposal-preview";
 import { countStudioDraftChanges, matchingStudioVersion, type StudioDraftContent } from "./studio-draft-state";
+import { hasCopyAssistance, productReferenceId, scrollStudioPanel, studioContentBlocks } from "./studio-block-controls";
 
 type StudioTab = "ask" | "inspect" | "shopify" | "visuals" | "versions" | "code" | "preflight";
 type Snapshot = { id: string; label: string; createdAt: Date; blocks: EmailBlock[]; subject: string; previewText: string };
 type Proposal = { id?: string; blocks: EmailBlock[]; subject: string; previewText: string; instruction: string; createdAt: Date; baseSignature: string; stale?: boolean };
-type DurableVersion = { id: string; sequence: number; source: string; note?: string | null; createdAt: string | Date; document: unknown };
 const EMPTY_DURABLE_VERSIONS: DurableVersion[] = [];
-type ProposalHistoryItem = { id: string; instruction: string; scope?: string | null; status: string; createdAt: string | Date; resolvedAt?: string | Date | null };
 type PendingProposal = { id: string; instruction: string; createdAt: string | Date; stale: boolean; candidate: { blocks: EmailBlock[]; envelope: { subject: string; previewText: string } } };
 
 let idCounter = 0;
@@ -48,6 +49,7 @@ const ADDABLE: { type: EmailBlockType; label: string }[] = [
   { type: "product", label: "Product" }, { type: "product_grid", label: "Product grid" },
   { type: "testimonial", label: "Testimonial" }, { type: "icon_row", label: "Reasons" },
   { type: "divider", label: "Divider" }, { type: "spacer", label: "Spacer" },
+  { type: "countdown", label: "Countdown" },
   { type: "custom_html", label: "Custom HTML" },
 ];
 
@@ -109,22 +111,23 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
   /** Overrides the default "go back the way you came". */
   onBack?: () => void;
 }) {
-  const [blocks, setBlocks] = React.useState<EmailBlock[]>(() => cloneBlocks(initialBlocks));
+  const [blocks, setBlocks] = React.useState<EmailBlock[]>(() => cloneBlocks(studioContentBlocks(initialBlocks)));
   const [subject, setSubject] = React.useState(initialSubject);
   const [previewText, setPreviewText] = React.useState(initialPreviewText);
   const [savedDraft, setSavedDraft] = React.useState<StudioDraftContent>(() => ({
-    blocks: cloneBlocks(initialBlocks), subject: initialSubject, previewText: initialPreviewText,
+    blocks: cloneBlocks(studioContentBlocks(initialBlocks)), subject: initialSubject, previewText: initialPreviewText,
   }));
   const [lastSavedVersionNumber, setLastSavedVersionNumber] = React.useState<number | null>(initialSavedVersionNumber ?? null);
   const draftContent = React.useMemo(() => ({ blocks, subject, previewText }), [blocks, subject, previewText]);
   const unsavedChangeCount = React.useMemo(() => countStudioDraftChanges(savedDraft, draftContent), [savedDraft, draftContent]);
   const dirty = unsavedChangeCount > 0;
   const draftSignature = JSON.stringify({ blocks, subject, previewText });
-  const [selectedId, setSelectedId] = React.useState<string | null>(initialBlocks[0]?.id ?? null);
+  const [selectedId, setSelectedId] = React.useState<string | null>(studioContentBlocks(initialBlocks)[0]?.id ?? null);
   const [html, setHtml] = React.useState(initialHtml);
   const [previewOpen, setPreviewOpen] = React.useState(false);
   const [previewModalHtml, setPreviewModalHtml] = React.useState<string | null>(null);
   const [previewModalError, setPreviewModalError] = React.useState<string | null>(null);
+  const [previewDescription, setPreviewDescription] = React.useState("");
   const [activeTab, setActiveTab] = React.useState<StudioTab>("ask");
   const [compactPanelOpen, setCompactPanelOpen] = React.useState(false);
   const [compactOutlineOpen, setCompactOutlineOpen] = React.useState(false);
@@ -136,13 +139,13 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
   const isDesktop = useIsDesktop();
   const router = useRouter();
   const utils = trpc.useUtils();
-  const openPanelSection = (section: "ask" | "visuals" | "versions" | "preflight" | "code") => {
-    setActiveTab(section);
+  const openPanelSection = (section: "ask" | "visuals" | "versions" | "preflight" | "code" | "footer") => {
+    setActiveTab(section === "footer" ? "inspect" : section);
     setToolsOpen(true);
     setCompactPanelOpen(true);
-    if (section === "versions" || section === "preflight") setSelectedId(null);
+    if (section === "versions" || section === "preflight" || section === "footer") setSelectedId(null);
     window.requestAnimationFrame(() => {
-      panelScrollRef.current?.querySelector(`[data-panel-section="${section}"]`)?.scrollIntoView({ block: "start", behavior: "smooth" });
+      scrollStudioPanel(panelScrollRef.current, section);
     });
   };
   const leaveStudio = () => {
@@ -155,10 +158,7 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
   const [askScope, setAskScope] = React.useState<AskScope>("document");
   const [visualMode, setVisualMode] = React.useState<VisualMode>("creative_concept");
   const [visualSlots, setVisualSlots] = React.useState<VisualSlotDraft[]>([
-    { id: "hero", label: "Clean hero", prompt: "" },
-    { id: "lifestyle", label: "In use", prompt: "" },
-    { id: "crop", label: "Close crop", prompt: "" },
-    { id: "backdrop", label: "Campaign backdrop", prompt: "" },
+    { id: "lifestyle", label: "Picture request", prompt: "" },
   ]);
   const [visuals, setVisuals] = React.useState<GeneratedVisual[]>([]);
   const [visualFailures, setVisualFailures] = React.useState<VisualFailure[]>([]);
@@ -166,7 +166,6 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
   const [visualTarget, setVisualTarget] = React.useState<VisualProposal["target"] | null>(null);
   const [visualGroundingProductId, setVisualGroundingProductId] = React.useState<string | null | undefined>(undefined);
   const [visualTargetDescription, setVisualTargetDescription] = React.useState<string | null>(null);
-  const [visualProductHasImage, setVisualProductHasImage] = React.useState(false);
   /** The four-slot form is a deliberate advanced workflow, not the default. */
   const [advancedVisuals, setAdvancedVisuals] = React.useState(false);
   /** A short receipt after inserting a Shopify token, so it is not silent. */
@@ -178,7 +177,7 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
   const restoredProposalIds = React.useRef(new Set<string>());
   const [proposalView, setProposalView] = React.useState<"before" | "proposed">("proposed");
   const [versions, setVersions] = React.useState<Snapshot[]>([
-    { id: "opened", label: "Opened in studio", createdAt: new Date(), blocks: cloneBlocks(initialBlocks), subject: initialSubject, previewText: initialPreviewText },
+    { id: "opened", label: "Opened in studio", createdAt: new Date(), blocks: cloneBlocks(studioContentBlocks(initialBlocks)), subject: initialSubject, previewText: initialPreviewText },
   ]);
   const [versionCursor, setVersionCursor] = React.useState(0);
   const [codeDraft, setCodeDraft] = React.useState("");
@@ -342,11 +341,12 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
   ) as { data?: import("./VisualGenerator").VisualCapabilities };
 
   /** The product the selected block is about, if any — visuals are grounded in it. */
-  const blockProductId = visualGroundingProductId !== undefined ? visualGroundingProductId : (selected && selected.type === "product"
-    ? (selected.props.productId || null)
-    : (blocks.find((block) => block.type === "product") as any)?.props?.productId ?? null);
+  const blockProductId = visualGroundingProductId !== undefined ? visualGroundingProductId : productReferenceId(selected);
+  const { data: referenceProduct } = (trpc.products as any).getById.useQuery(
+    { id: blockProductId ?? "" }, { enabled: !!blockProductId },
+  ) as { data?: { id: string; title: string; imageUrl?: string | null; storeId: string } };
   const blockProduct = blockProductId
-    ? (productPage?.products ?? []).find((product) => product.id === blockProductId) ?? null
+    ? (referenceProduct?.storeId === storeId ? referenceProduct : (productPage?.products ?? []).find((product) => product.id === blockProductId)) ?? null
     : null;
 
   const generateVisuals = (requestedSlots = visualSlots, requestedMode = visualMode, productId = blockProductId) => {
@@ -364,9 +364,13 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
           : "card" as const,
       }));
     if (!slots.length) return;
+    if (!visualTarget && (selected?.type === "image" || selected?.type === "hero")) {
+      setVisualTarget({ kind: "existing", blockType: selected.type, blockId: selected.id });
+      setVisualTargetDescription("Fill this image block");
+    }
     setVisualFailures([]);
     generateVisualsMut.mutate(
-      { storeId, templateId, productId: productId ?? undefined, mode: requestedMode, slots },
+      { storeId, templateId, productId: productId ?? undefined, sourceAssetIds: productId ? [] : selectedAssetIds.slice(0, 1), mode: productId || selectedAssetIds.length ? "product_safe" : requestedMode, slots },
       {
         onSuccess: (data: { assets: GeneratedVisual[]; failures: VisualFailure[] }) => {
           setVisuals(data.assets);
@@ -395,8 +399,8 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
     setVisualSlots([slot]);
     setVisualMode(visualProposal.mode);
     setVisualTarget(visualProposal.target);
+    setVisualGroundingProductId(visualProposal.product?.id ?? null);
     setVisualTargetDescription(visualProposal.targetDescription);
-    setVisualProductHasImage(Boolean(visualProposal.product?.hasImage));
     setVisuals([]);
     setVisualFailures([]);
     setAdvancedVisuals(true);
@@ -424,7 +428,6 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
       setSelectedId(placement.selectedId);
       setVisualTarget(null);
       setVisualTargetDescription(null);
-      setVisualProductHasImage(false);
       setVisuals([]);
       setVisualGroundingProductId(undefined);
       setActiveTab("inspect");
@@ -433,7 +436,8 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
     }
     if (!selected) { toast("Select an image or hero block first.", "error"); return; }
     if (selected.type === "image") {
-      updateBlock({ ...selected, props: { ...selected.props, src: visual.url, alt: visual.label } } as EmailBlock);
+      updateBlock({ ...selected, props: { ...selected.props, src: visual.url, alt: visual.label,
+        ...(visual.sourceProductId !== undefined ? { sourceProductId: visual.sourceProductId ?? undefined } : {}) } } as EmailBlock);
     } else if (selected.type === "hero") {
       updateBlock({ ...selected, props: { ...selected.props, bgImageSrc: visual.url } } as EmailBlock);
     } else if (selected.type === "product") {
@@ -460,7 +464,9 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
   const useLibraryItem = (item: { url: string; label: string; altText?: string | null }) => {
     if (!selected) { toast("Select an image or hero block first.", "error"); return; }
     if (selected.type === "image") {
-      updateBlock({ ...selected, props: { ...selected.props, src: item.url, alt: item.altText || item.label } } as EmailBlock);
+      const props = { ...selected.props, src: item.url, alt: item.altText || item.label };
+      delete props.sourceProductId;
+      updateBlock({ ...selected, props });
     } else if (selected.type === "hero") {
       updateBlock({ ...selected, props: { ...selected.props, bgImageSrc: item.url } } as EmailBlock);
     } else if (selected.type === "product") {
@@ -531,12 +537,22 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
   const createProductScene = () => {
     if (!selected) return;
     const imageBlock = createDefaultBlock("image", newId("image"));
+    if (imageBlock.type === "image" && selected.type === "product" && selected.props.productId) {
+      imageBlock.props.sourceProductId = selected.props.productId;
+    }
     const index = blocks.findIndex((block) => block.id === selected.id);
     const next = [...blocks];
     next.splice(Math.max(0, index + 1), 0, imageBlock);
     setBlocks(next);
     setSelectedId(imageBlock.id);
     setVisualGroundingProductId(selected.type === "product" ? selected.props.productId || null : null);
+    setVisualMode("product_safe");
+    setVisualTarget(null);
+    setVisualTargetDescription(null);
+    setSelectedAssetIds([]);
+    setVisualSlots([{ id: "lifestyle", label: "Picture request", prompt: "" }]);
+    setVisuals([]);
+    setVisualFailures([]);
     setAdvancedVisuals(true);
     openPanelSection("visuals");
     toast("Added an image block below the product. Its own photo is untouched.", "success");
@@ -575,6 +591,7 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
     setBlocks((current) => { const next = current.filter((block) => block.id !== blockId); if (selectedId === blockId) setSelectedId(next[0]?.id ?? null); return next; });
   };
   const selectCanvasBlock = (blockId: string) => {
+    if (blockId === "__brand_footer") { openPanelSection("footer"); return; }
     // The inspector edits the current draft, never the proposed snapshot. A
     // click on the preview therefore returns to the editable draft first.
     if (showProposed) setProposalView("before");
@@ -584,6 +601,7 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
     }
     setSelectedId(blockId);
     setVisualGroundingProductId(undefined);
+    setAdvancedVisuals(false);
     setActiveTab("inspect");
     setToolsOpen(true);
     setCompactPanelOpen(true);
@@ -598,7 +616,7 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
   };
   const restoreVersion = (index: number) => {
     const version = versions[index]; if (!version) return;
-    setBlocks(cloneBlocks(version.blocks)); setSubject(version.subject); setPreviewText(version.previewText); setSelectedId(version.blocks[0]?.id ?? null); setVersionCursor(index); setProposal(null);
+    setBlocks(cloneBlocks(studioContentBlocks(version.blocks))); setSubject(version.subject); setPreviewText(version.previewText); setSelectedId(studioContentBlocks(version.blocks)[0]?.id ?? null); setVersionCursor(index); setProposal(null);
   };
   const saveDraft = (afterSave?: () => void) => {
     if (!templateId) { toast("This email cannot be saved right now. Reopen it and try again.", "error"); return; }
@@ -635,13 +653,22 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
       onError: (error) => toast(error.message ?? "Could not save this email.", "error"),
     });
   };
-  const openFullPreview = () => {
+  const inboxRenderMut = (trpc.emails as any).renderPreview.useMutation();
+  const inboxRenderSeq = React.useRef(0);
+  const openFullPreview = (version?: DurableVersion) => {
+    const historical = version ? (version.document as { blocks: EmailBlock[]; envelope: { subject: string; previewText: string } }) : null;
+    const description = version ? `Saved v${version.sequence} · read-only layout and copy with current store data · not a sent snapshot`
+      : showProposed ? "Joon's suggestion · not applied to your draft"
+      : dirty ? `Your draft · ${unsavedChangeCount} unsaved changes`
+      : savedVersionNumber !== null ? `v${savedVersionNumber} · the version this campaign reviews` : "Your draft · no saved version";
+    setPreviewDescription(description);
     setPreviewOpen(true);
     setPreviewModalHtml(null);
     setPreviewModalError(null);
-    renderMut.mutate({ blocks: effectiveBlocks, subject: effectiveSubject, previewText: effectivePreviewText, variables: previewVariables, brandKit, storeId }, {
-      onSuccess: (data: { html: string }) => setPreviewModalHtml(data.html),
-      onError: () => setPreviewModalError("Joon couldn't render this preview. Your edits are still here; close this view and try again."),
+    const sequence = ++inboxRenderSeq.current;
+    inboxRenderMut.mutate({ blocks: historical?.blocks ?? effectiveBlocks, subject: historical?.envelope.subject ?? effectiveSubject, previewText: historical?.envelope.previewText ?? effectivePreviewText, variables: previewVariables, brandKit, storeId }, {
+      onSuccess: (data: { html: string }) => { if (sequence === inboxRenderSeq.current) setPreviewModalHtml(data.html); },
+      onError: () => { if (sequence === inboxRenderSeq.current) setPreviewModalError("Joon couldn't render this preview. Your edits are still here; close this view and try again."); },
     });
   };
   const askJoon = (text = instruction, scope?: "subject" | "copy" | "visual" | "tone") => {
@@ -651,7 +678,7 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
       : askScope === "envelope"
       ? { kind: "envelope" as const }
       : { kind: "document" as const };
-    promptMut.mutate({ instruction: text, blocks, subject, previewText, scope, editScope, storeId, templateId, selectedBlockId: selectedId ?? undefined, sourceAssetIds: selectedAssetIds }, {
+    promptMut.mutate({ instruction: text, blocks, subject, previewText, scope, editScope, storeId, templateId, selectedBlockId: selectedId ?? undefined }, {
       onSuccess: (data: { applied: boolean; blocks: EmailBlock[]; subject?: string; previewText?: string; proposalId?: string; error?: string; visualProposal?: VisualProposal }) => {
         // A request for artwork comes back as a proposal, not a mutation.
         if (data.visualProposal) { setVisualProposal(data.visualProposal); setInstruction(""); return; }
@@ -685,8 +712,8 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
     if (!templateId || restoreVersionMut.isPending) return;
     restoreVersionMut.mutate({ templateId, versionId }, {
       onSuccess: (data: any) => {
-        const nextBlocks = data.template.blocks as EmailBlock[];
-        setBlocks(cloneBlocks(nextBlocks)); setSubject(data.template.subject); setPreviewText(data.template.previewText ?? ""); setSelectedId(nextBlocks[0]?.id ?? null); setProposal(null); setSavedDraft({ blocks: cloneBlocks(nextBlocks), subject: data.template.subject, previewText: data.template.previewText ?? "" }); if (typeof data.version?.sequence === "number") setLastSavedVersionNumber(data.version.sequence); void durableVersionsQuery.refetch(); toast("Restored as a new version.", "success");
+        const nextBlocks = studioContentBlocks(data.template.blocks as EmailBlock[]);
+        setBlocks(cloneBlocks(nextBlocks)); setSubject(data.template.subject); setPreviewText(data.template.previewText ?? ""); setSelectedId(nextBlocks[0]?.id ?? null); setProposal(null); setSavedDraft({ blocks: cloneBlocks(nextBlocks), subject: data.template.subject, previewText: data.template.previewText ?? "" }); if (typeof data.version?.sequence === "number") setLastSavedVersionNumber(data.version.sequence); void durableVersionsQuery.refetch(); toast(`Restored v${data.version?.sequence ?? ""}. Saved history and the approved email are unchanged.`, "success");
       },
       onError: (error: { message?: string }) => toast(error.message ?? "Could not restore this version.", "error"),
     });
@@ -706,7 +733,7 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
       const response = await fetch(upload.uploadUrl, { method: "PUT", headers: { "content-type": file.type }, body: file });
       if (!response.ok) throw new Error(`Upload failed (${response.status}).`);
       const asset = await completeAssetUploadMut.mutateAsync({ storeId, key: upload.key, fileName: file.name, type: "reference_image" });
-      setSelectedAssetIds((current) => [...new Set([...current, asset.id])]);
+      setSelectedAssetIds([asset.id]);
       await creativeAssetsQuery.refetch();
       void libraryQuery.refetch();
       const target = blocks.find((block) => block.id === targetBlockId);
@@ -724,7 +751,19 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
     }
   };
 
-  const askPanel = <AskPanel embedded visualProposal={visualProposal} onVisualGenerate={generateProposedVisual} onVisualRefine={() => { setInstruction(visualProposal?.instruction ?? ""); setVisualProposal(null); }} onVisualCancel={() => setVisualProposal(null)} inputRef={askInputRef} selected={selected} scope={askScope} setScope={setAskScope} instruction={instruction} setInstruction={setInstruction} pending={promptMut.isPending} error={promptError} assets={creativeAssets} selectedAssetIds={selectedAssetIds} setSelectedAssetIds={setSelectedAssetIds} onAsk={askJoon} onUpload={uploadAsset} uploading={assetUploading} history={proposalHistoryQuery.data ?? []} />;
+  const askPanel = <AskPanel embedded visualProposal={visualProposal} onVisualGenerate={generateProposedVisual} onVisualRefine={() => { setInstruction(visualProposal?.instruction ?? ""); setVisualProposal(null); }} onVisualCancel={() => setVisualProposal(null)} inputRef={askInputRef} selected={selected} scope={askScope} setScope={setAskScope} instruction={instruction} setInstruction={setInstruction} pending={promptMut.isPending} error={promptError} onAsk={askJoon} history={proposalHistoryQuery.data ?? []} />;
+  const beginPictureGeneration = (several = false) => {
+    setVisualTarget(null); setVisualTargetDescription(null);
+    const currentUrl = selected?.type === "image" ? selected.props.src : selected?.type === "hero" ? selected.props.bgImageSrc : null;
+    const existingReference = currentUrl ? creativeAssets.find((asset) => asset.url === currentUrl) : null;
+    if (!blockProductId && existingReference) setSelectedAssetIds([existingReference.id]);
+    setVisualMode(blockProductId || existingReference || selectedAssetIds.length ? "product_safe" : "creative_concept");
+    setVisualSlots(several ? [
+      { id: "hero", label: "Hero picture", prompt: "" }, { id: "lifestyle", label: "In use", prompt: "" },
+      { id: "crop", label: "Close crop", prompt: "" }, { id: "backdrop", label: "Backdrop", prompt: "" },
+    ] : [{ id: "lifestyle", label: "Picture request", prompt: "" }]);
+    setAdvancedVisuals(true); openPanelSection("visuals");
+  };
   const pictureControls = !selected && !advancedVisuals ? (
     <button type="button" onClick={() => add("image")} className="w-full rounded-lg border border-border px-3 py-2 text-left text-[13px] hover:bg-[#F4F2EC]">Add an image block</button>
   ) : !advancedVisuals ? (
@@ -733,13 +772,27 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
       capabilities={visualCapabilities ?? null}
       productTitle={blockProduct?.title ?? null}
       embedded
-      onGenerate={() => { setVisualTarget(null); setVisualTargetDescription(null); setAdvancedVisuals(true); openPanelSection("visuals"); }}
+      onGenerate={() => beginPictureGeneration()}
       onUpload={() => openUploadPicker()}
       onChooseFromLibrary={() => setLibraryOpen(true)}
       onCreateProductScene={createProductScene}
-      onOpenAdvanced={() => { setVisualTarget(null); setVisualTargetDescription(null); setAdvancedVisuals(true); openPanelSection("visuals"); }}
+      onOpenAdvanced={() => beginPictureGeneration(true)}
     />
-  ) : <VisualGenerator mode={visualMode} setMode={setVisualMode} slots={visualSlots} setSlots={setVisualSlots} productTitle={blockProduct?.title ?? null} productHasImage={visualTarget ? visualProductHasImage : Boolean(blockProduct?.imageUrl)} capabilities={visualCapabilities ?? null} results={visuals} failures={visualFailures} pending={generateVisualsMut.isPending} placementDescription={visualTargetDescription} onGenerate={() => generateVisuals()} onUseAsset={useVisual} />;
+  ) : <>
+    {!visualTarget ? <label className="block text-[12px]">Shopify product reference
+      <select value={blockProductId ?? ""} disabled={generateVisualsMut.isPending} onChange={(event) => {
+        const id = event.target.value || null; setVisualGroundingProductId(id); setSelectedAssetIds([]);
+        setVisualMode(id ? "product_safe" : "creative_concept");
+        if (selected?.type === "image") { const props = { ...selected.props }; if (id) props.sourceProductId = id; else delete props.sourceProductId; updateBlock({ ...selected, props }); }
+      }} className="mt-1 w-full rounded-lg border border-border bg-transparent px-2 py-2 text-[13px]">
+        <option value="">No Shopify product · use a reference or illustrative artwork</option>
+        {blockProduct && !(productPage?.products ?? []).some((product) => product.id === blockProduct.id) ? <option value={blockProduct.id}>{blockProduct.title}</option> : null}
+        {(productPage?.products ?? []).map((product) => <option key={product.id} value={product.id}>{product.title}</option>)}
+      </select>
+    </label> : null}
+    <VisualGenerator mode={blockProductId || selectedAssetIds.length ? "product_safe" : visualMode} setMode={(mode) => { setVisualMode(mode); if (mode === "creative_concept") setSelectedAssetIds([]); }} slots={visualSlots} setSlots={setVisualSlots} productTitle={blockProduct?.title ?? null} productImageUrl={blockProduct?.imageUrl} productHasImage={Boolean(blockProduct?.imageUrl)} referenceAssets={creativeAssets} selectedReferenceId={selectedAssetIds[0] ?? null} onSelectReference={(id) => { setSelectedAssetIds(id ? [id] : []); setVisualMode(id ? "product_safe" : "creative_concept"); }} capabilities={visualCapabilities ?? null} results={visuals} failures={visualFailures} pending={generateVisualsMut.isPending} placementDescription={visualTargetDescription} onGenerate={() => generateVisuals()} onUseAsset={useVisual} onClose={() => setAdvancedVisuals(false)} />
+    {!blockProductId ? <button type="button" onClick={() => openUploadPicker(null)} className="mt-2 text-[12px] text-[#2D4F9E] underline underline-offset-2">Upload a reference photo</button> : null}
+  </>;
 
   // The root fills its parent rather than subtracting a fixed 6.25rem for a
   // dashboard top bar the Studio route no longer has — that allowance was
@@ -772,7 +825,7 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
         canRedo={versionCursor < versions.length - 1}
         onUndo={() => restoreVersion(Math.max(0, versionCursor - 1))}
         onRedo={() => restoreVersion(Math.min(versions.length - 1, versionCursor + 1))}
-        onPreview={openFullPreview}
+        onPreview={() => openFullPreview()}
         onSave={() => {
           if (showProposed) {
             toast("Accept Joon's suggestion, or switch to Current draft before saving.", "info");
@@ -816,7 +869,7 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
           <div className="flex items-center justify-between border-b border-border px-3 py-2"><div><p className="text-[13px] font-medium">Content</p><p className="text-[12px] text-muted-foreground">{blocks.length} blocks</p></div><IconButton label="Add block" onClick={() => setShowAdd((value) => !value)}><Plus className="h-4 w-4" /></IconButton></div>
           <button type="button" onClick={() => setOutlineOpen(false)} aria-expanded={true} className="mx-3 mt-2 inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg border border-border bg-[#FFFDF8] px-3 py-2 text-[12px] font-medium outline-none transition-colors hover:border-[#2D4F9E] hover:bg-[#E9EFFF] focus-visible:ring-2 focus-visible:ring-[#2D4F9E]"><PanelLeftClose className="h-3.5 w-3.5" />Hide outline</button>
           {showAdd ? <BlockPicker onAdd={add} /> : null}
-          <div className="min-h-0 flex-1 overflow-y-auto"><BlockList blocks={blocks} selectedId={selectedId} onSelect={(blockId) => { selectCanvasBlock(blockId); setToolsOpen(true); }} onMove={move} onRemove={remove} blockTitle={nameOf} /></div>
+          <div className="min-h-0 flex-1 overflow-y-auto"><BlockList blocks={blocks} selectedId={selectedId} onSelect={(blockId) => { selectCanvasBlock(blockId); setToolsOpen(true); }} onMove={move} onRemove={remove} blockTitle={nameOf} /><button type="button" onClick={() => openPanelSection("footer")} className="mx-3 mb-3 block text-left text-[12px] text-[#2D4F9E] underline underline-offset-2">Brand footer · fixed after all content</button></div>
         </aside>
 
         {isDesktop && !outlineOpen ? (
@@ -888,14 +941,15 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
               </ContextSection>
               {selected.type === "product" || selected.type === "product_grid" ? <ContextSection title="From Shopify" description="Store facts stay connected to your catalog."><ShopifyDataPanel selected={selected} products={(productPage?.products ?? []) as any} collections={(storeCollections ?? []) as any} variants={(productVariants ?? []) as any} storeConnected={!!storeId} onBindProduct={bindProduct} onBindVariant={bindVariant} onToggleGridProduct={toggleGridProduct} onBindCollection={bindCollection} onInsertToken={insertToken} /></ContextSection> : null}
               {selected.type === "product" || (advancedVisuals && selected.type !== "image" && selected.type !== "hero") ? <ContextSection title="Picture" description={selected.type === "product" ? "The product photo stays from Shopify. Make a separate campaign picture." : "Choose, upload or generate a picture for this email."} sectionKey="visuals">{pictureControls}</ContextSection> : null}
-              <ContextSection title="Ask Joon about this block" description="Suggestions stay separate until you accept them." sectionKey="ask">{askPanel}</ContextSection>
+              {hasCopyAssistance(selected) ? <ContextSection title="Ask Joon about this block" description="Copy and supported styling suggestions only. Picture generation and its references are in Picture above." sectionKey="ask">{askPanel}</ContextSection> : null}
               <details className="border-t border-border px-4 py-3" open={activeTab === "code" ? true : undefined}><summary className="cursor-pointer text-[13px] font-medium">Advanced · structured code</summary><CodePanel selected={selected} code={codeDraft} setCode={setCodeDraft} apply={applyCode} /></details>
             </> : <>
               <ContextSection title="Envelope" description="The subject and the line shown beside it in an inbox."><div className="grid gap-3"><EnvelopeField label="Subject" value={subject} onChange={setSubject} /><EnvelopeField label="Inbox preview" value={previewText} onChange={setPreviewText} /></div></ContextSection>
               <ContextSection title="Ask Joon about this email" description="Ask for the subject or the whole draft." sectionKey="ask">{askPanel}</ContextSection>
               <ContextSection title="Pictures" description="Make campaign artwork, then choose where it belongs." sectionKey="visuals">{pictureControls}</ContextSection>
               <ContextSection title="Checks on this draft" description={`${preflight.passed} of ${preflight.checks.length} checks pass.`} sectionKey="preflight"><PreflightPanel preflight={preflight} /></ContextSection>
-              <ContextSection title="Versions" description="See what was saved and restore an earlier version." sectionKey="versions"><VersionsPanel versions={versions} cursor={versionCursor} restore={restoreVersion} durableVersions={durableVersionsQuery.data ?? []} restoreDurable={restoreDurableVersion} restoring={restoreVersionMut.isPending} /></ContextSection>
+              <ContextSection title="Brand footer" description="Fixed after all email content. It cannot be moved or deleted here." sectionKey="footer"><p className="text-[12px] leading-5 text-muted-foreground">The renderer always supplies the unsubscribe link. Brand footer text, address and social links come from your store’s Brand settings.</p><a href="/intelligence/brand" className="mt-2 inline-block text-[13px] text-[#2D4F9E] underline underline-offset-2" onClick={(event) => { if (dirty && !window.confirm("This email has unsaved changes. Leave without saving?")) event.preventDefault(); }}>Edit brand footer and social links</a></ContextSection>
+              <ContextSection title="Versions" description="View a saved email without changing your draft, or restore it." sectionKey="versions"><VersionsPanel versions={versions} cursor={versionCursor} restore={restoreVersion} durableVersions={durableVersionsQuery.data ?? []} restoreDurable={restoreDurableVersion} viewDurable={(version) => openFullPreview(version)} restoring={restoreVersionMut.isPending} /></ContextSection>
             </>}
             {insertReceipt ? <p role="status" className="mx-4 my-3 rounded-lg border border-[#157858]/30 bg-[#E5F4EE] px-2.5 py-1.5 text-[12px] text-[#157858]">{insertReceipt}</p> : null}
           </div>
@@ -913,7 +967,7 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
       <nav aria-label="Studio actions" className="grid shrink-0 grid-cols-4 border-t border-border bg-[#FFFDF8] xl:hidden">
         <button type="button" onClick={() => { setCompactPanelOpen(false); setCompactOutlineOpen(true); }} className="px-2 py-3 text-[12px]">Blocks</button>
         <button type="button" onClick={() => { setSelectedId(null); setCompactOutlineOpen(false); setCompactPanelOpen(true); }} className="px-2 py-3 text-[12px]">Email</button>
-        <button type="button" onClick={openFullPreview} className="px-2 py-3 text-[12px]">Preview</button>
+        <button type="button" onClick={() => openFullPreview()} className="px-2 py-3 text-[12px]">Preview</button>
         <button type="button" disabled={!reviewHref || saveMut.isPending || showProposed} onClick={() => { if (reviewNeedsSave) saveDraft(() => router.push(reviewHref!)); else router.push(reviewHref!); }} className="px-2 py-3 text-[12px] disabled:opacity-40">Delivery</button>
       </nav>
 
@@ -936,14 +990,7 @@ export function EmailStudio({ initialBlocks, initialSubject, initialPreviewText,
               <div className="min-w-0">
                 <Dialog.Title className="truncate text-[15px] font-medium">Inbox preview</Dialog.Title>
                 <Dialog.Description id="studio-preview-description" className="mt-1 text-[12px] text-muted-foreground">
-                  {showProposed
-                    ? "Joon's suggestion · not applied to your draft"
-                    : dirty
-                      ? `Your draft · ${unsavedChangeCount} unsaved change${unsavedChangeCount === 1 ? "" : "s"}`
-                      : savedVersionNumber !== null
-                        ? `v${savedVersionNumber} · the version this campaign reviews`
-                        : "Your draft · no saved version"}
-                  {effectiveSubject ? ` · ${effectiveSubject}` : ""}
+                  {previewDescription}
                 </Dialog.Description>
               </div>
               <Dialog.Close className="rounded-lg border border-border p-2 outline-none hover:bg-[#F4F2EC] focus-visible:ring-2 focus-visible:ring-[#2D4F9E]" aria-label="Close full preview"><X className="h-4 w-4" /></Dialog.Close>
@@ -1021,27 +1068,6 @@ function ProposalBar({ proposal, view, setView, reject, accept, pending, notice 
   return <div className="shrink-0 border-b border-[var(--attention,#C99116)]/30 bg-[var(--attention-soft,#FFF0B8)] px-5 py-2.5"><div className="flex flex-wrap items-center justify-between gap-3"><div className="flex min-w-0 flex-wrap items-center gap-3"><Sparkles className="h-4 w-4 shrink-0 text-[var(--attention,#C99116)]" /><p className="min-w-0 text-[13px]"><span className="font-medium">Joon suggested:</span> {proposal.instruction}</p><div className="flex rounded-lg border border-[var(--attention,#C99116)]/40 bg-white/50 p-0.5" aria-label="Compare email suggestion">{(["before", "proposed"] as const).map((item) => <button key={item} type="button" onClick={() => setView(item)} disabled={item === "proposed" && Boolean(notice)} aria-pressed={view === item} className={cn("rounded-md px-2.5 py-1 text-[12px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#17204D] disabled:opacity-40", view === item && "bg-white shadow-sm")}>{item === "before" ? "Current draft" : "Joon's suggestion"}</button>)}</div></div><div className="flex items-center gap-2"><button type="button" onClick={reject} disabled={pending} className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-white/70 px-3 py-1.5 text-[12px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#17204D] disabled:opacity-40"><X className="h-3.5 w-3.5" />Reject</button><button type="button" onClick={accept} disabled={pending || Boolean(notice)} className="inline-flex items-center gap-1.5 rounded-lg bg-[#17204D] px-3 py-1.5 text-[12px] font-medium text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#17204D] focus-visible:ring-offset-2 disabled:opacity-40">{pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}Accept change</button></div></div>{notice ? <p role="status" className="mt-2 text-[12px] leading-5 text-foreground">{notice}</p> : null}</div>;
 }
 
-function AskPanel({ embedded = false, visualProposal, onVisualGenerate, onVisualRefine, onVisualCancel, inputRef, selected, scope, setScope, instruction, setInstruction, pending, error, assets, selectedAssetIds, setSelectedAssetIds, onAsk, onUpload, uploading, history }: { embedded?: boolean; visualProposal: VisualProposal | null; onVisualGenerate: () => void; onVisualRefine: () => void; onVisualCancel: () => void; inputRef: React.RefObject<HTMLTextAreaElement | null>; selected: EmailBlock | null; scope: AskScope; setScope: (value: AskScope) => void; instruction: string; setInstruction: (value: string) => void; pending: boolean; error: string | null; assets: Array<{ id: string; fileName: string; type: string }>; selectedAssetIds: string[]; setSelectedAssetIds: React.Dispatch<React.SetStateAction<string[]>>; onAsk: (text?: string, scope?: "subject" | "copy" | "visual" | "tone") => void; onUpload: (file: File) => void; uploading: boolean; history: ProposalHistoryItem[] }) {
-  /**
-   * Suggestions that make sense for what is selected.
-   *
-   * "Try a stronger visual" on a PRODUCT block was answered by hiding the
-   * product image — technically a presentation change Joon is allowed to make,
-   * and exactly not what the merchant asked for. A product block's picture is
-   * a Shopify fact, so the chips here are about wording and layout, and
-   * imagery is directed from the Visuals tab where the real controls live.
-   */
-  const suggestions = !selected
-    ? ["Make the email more visual", "Tighten the whole email", "Try a warmer direction", "Create a fresh layout"]
-    : selected.type === "product" || selected.type === "product_grid"
-    ? ["Make this clearer", "Shorten this block", "Match our brand voice", "Stronger call to action"]
-    : selected.type === "image" || selected.type === "hero"
-    ? ["Make this clearer", "Match our brand voice", "Shorten this block"]
-    : ["Make this clearer", "Shorten this block", "Match our brand voice", "Warmer tone"];
-  return <div className="flex min-h-0 flex-col"><div className={embedded ? "py-2" : "p-4"}>{!embedded ? <PanelHeading eyebrow="Ask Joon" title={selected ? blockTitle(selected) : "This email"} description="Every result arrives as a proposal you accept or reject. Nothing changes until you do." /> : null}{!selected ? <ScopeChooser scope={scope} setScope={setScope} selectedTitle={null} /> : null}{visualProposal ? <VisualProposalCard proposal={visualProposal} onGenerate={onVisualGenerate} onRefine={onVisualRefine} onCancel={onVisualCancel} /> : null}{history.length ? <div className="mt-5 space-y-2 border-l border-border pl-3">{history.slice(-8).map((item) => <div key={item.id} className="rounded-r-xl bg-[#F4F2EC] p-2.5"><div className="flex items-start justify-between gap-2"><p className="text-[12px] leading-5">{item.instruction}</p><span className={cn("shrink-0 rounded-full px-1.5 py-0.5 text-[10px]", item.status === "accepted" ? "bg-[var(--success-soft,#E5F4EE)] text-[#157858]" : item.status === "rejected" ? "bg-[var(--risk-soft,#FAE8E4)] text-[var(--risk,#B95849)]" : "bg-[var(--attention-soft,#FFF0B8)] text-foreground")}>{item.status}</span></div><p className="mt-1 text-[10px] text-muted-foreground">Joon prepared a reviewable change · {new Date(item.createdAt).toLocaleString()}</p></div>)}</div> : <div className="mt-5 rounded-xl border border-border bg-[#F4F2EC] p-3"><div className="flex gap-2.5"><div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#17204D] text-[11px] font-medium text-white">J</div><p className="text-[13px] leading-5">Tell me what should change. I’ll keep the current version intact and show you the proposal before anything is applied.</p></div></div>}<div className="mt-3 flex flex-wrap gap-1.5">{suggestions.map((suggestion) => <button key={suggestion} type="button" onClick={() => onAsk(suggestion)} disabled={pending} className="rounded-full border border-border px-2.5 py-1 text-[12px] hover:border-[var(--attention,#C99116)] hover:bg-[var(--attention-soft,#FFF0B8)] disabled:opacity-40">{suggestion}</button>)}</div><div className="mt-5"><div className="mb-2 flex items-center justify-between gap-2"><p className="text-[12px] font-medium">Reference assets</p><label className="cursor-pointer rounded-lg border border-border px-2 py-1 text-[11px] hover:bg-[#F4F2EC]"><input type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="sr-only" disabled={uploading} onChange={(event) => { const file = event.target.files?.[0]; if (file) void onUpload(file); event.currentTarget.value = ""; }} />{uploading ? "Uploading…" : "+ Upload"}</label></div><div className="flex flex-wrap gap-1.5">{assets.map((asset) => { const active = selectedAssetIds.includes(asset.id); return <button key={asset.id} type="button" onClick={() => setSelectedAssetIds((current) => active ? current.filter((id) => id !== asset.id) : [...current, asset.id])} className={cn("inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[12px]", active ? "border-[var(--evidence,#2D4F9E)] bg-[var(--evidence-soft,#E9EFFF)]" : "border-border")}><ImagePlus className="h-3.5 w-3.5" />{asset.fileName}</button>; })}{!assets.length ? <p className="text-[12px] text-muted-foreground">Upload a product or campaign reference, then ask Joon to use or transform it.</p> : null}</div></div></div><div className="border-t border-border bg-[var(--surface,#FFFDF8)] px-0 py-3"><div className="rounded-xl border border-border bg-white p-2 focus-within:border-[var(--evidence,#2D4F9E)]"><textarea ref={inputRef} value={instruction} onChange={(event) => setInstruction(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); onAsk(); } }} rows={4} placeholder={scope === "block" && selected ? `Ask Joon about “${blockTitle(selected)}”…` : scope === "envelope" ? "Ask Joon about the subject or inbox preview…" : "Ask Joon about the whole email…"} className="w-full resize-none bg-transparent px-1 text-[14px] leading-5 outline-none" /><div className="flex items-center justify-between"><span className="text-[11px] text-muted-foreground">Enter to propose · Shift Enter for a new line</span><button type="button" onClick={() => onAsk()} disabled={pending || !instruction.trim()} className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#17204D] text-white disabled:opacity-40" aria-label="Ask Joon">{pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}</button></div></div>{error ? <p className="mt-2 text-[12px] text-[var(--risk,#B95849)]">{error}</p> : null}</div></div>;
-}
-
-function VersionsPanel({ versions, cursor, restore, durableVersions, restoreDurable, restoring }: { versions: Snapshot[]; cursor: number; restore: (index: number) => void; durableVersions: DurableVersion[]; restoreDurable: (id: string) => void; restoring: boolean }) { return <div className="p-4"><PanelHeading eyebrow="Recoverable history" title="Versions" description="Manual and Joon changes share one history. Restoring creates a new version; nothing is erased." />{durableVersions.length ? <><p className="mb-2 mt-5 text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">Saved across sessions</p><div className="space-y-2">{durableVersions.map((version) => <button key={version.id} type="button" disabled={restoring} onClick={() => restoreDurable(version.id)} className="w-full rounded-xl border border-border p-3 text-left hover:bg-[#F4F2EC] disabled:opacity-40"><div className="flex items-center justify-between gap-3"><span className="text-[13px] font-medium">Version {version.sequence} · {version.source}</span><span className="text-[11px] text-muted-foreground">{new Date(version.createdAt).toLocaleDateString()}</span></div><p className="mt-1 text-[12px] text-muted-foreground">{version.note ?? "Saved email artifact"}</p></button>)}</div></> : null}<p className="mb-2 mt-5 text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">This session</p><div className="space-y-2">{[...versions].reverse().map((version, reverseIndex) => { const index = versions.length - reverseIndex - 1; return <button key={version.id} type="button" onClick={() => restore(index)} className={cn("w-full rounded-xl border p-3 text-left", index === cursor ? "border-[var(--evidence,#2D4F9E)] bg-[var(--evidence-soft,#E9EFFF)]" : "border-border hover:bg-[#F4F2EC]")}><div className="flex items-center justify-between gap-3"><span className="text-[13px] font-medium">{version.label}</span><span className="text-[11px] text-muted-foreground">{version.createdAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span></div><p className="mt-1 text-[12px] text-muted-foreground">{version.blocks.length} blocks · {version.subject || "No subject"}</p></button>; })}</div></div>; }
 function CodePanel({ selected, code, setCode, apply }: { selected: EmailBlock | null; code: string; setCode: (value: string) => void; apply: () => void }) { return <div className="p-4"><PanelHeading eyebrow="Structured code" title={selected ? blockTitle(selected) : "Select a block"} description="Edit the selected block as validated JSON. Use a Custom HTML block for precise email-safe markup." /><textarea value={code} onChange={(event) => setCode(event.target.value)} disabled={!selected} spellCheck={false} className="mt-5 min-h-[430px] w-full resize-y rounded-xl border border-border bg-[#171717] p-3 font-mono text-[12px] leading-5 text-[#F4F2EC] outline-none focus:border-[var(--attention,#C99116)] disabled:opacity-40" /><button type="button" onClick={apply} disabled={!selected} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[#17204D] px-3 py-2 text-[13px] font-medium text-white disabled:opacity-40"><Code2 className="h-4 w-4" />Apply code</button></div>; }
 function PreflightPanel({ preflight }: { preflight: ReturnType<typeof preflightEmail> }) { return <div className="p-4"><PanelHeading eyebrow="Exact artifact" title={`${preflight.passed} of ${preflight.checks.length} checks pass`} description="These checks run against the same structured email used for preview and delivery." /><div className="mt-5 space-y-2">{preflight.checks.map((check) => <div key={check.label} className="flex gap-3 rounded-xl border border-border p-3"><span className={cn("mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full", check.ok ? "bg-[var(--success-soft,#E5F4EE)] text-[#157858]" : "bg-[var(--risk-soft,#FAE8E4)] text-[var(--risk,#B95849)]")}>{check.ok ? <Check className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />}</span><div><p className="text-[13px] font-medium">{check.label}</p><p className="mt-0.5 text-[12px] leading-5 text-muted-foreground">{check.detail}</p></div></div>)}</div><div className="mt-4 rounded-xl border border-[var(--evidence,#2D4F9E)]/30 bg-[var(--evidence-soft,#E9EFFF)] p-3 text-[12px] leading-5"><strong>Approval happens on the campaign.</strong> Saving here creates the email version; campaign approval freezes this version with its audience, offer and delivery plan.</div></div>; }
 

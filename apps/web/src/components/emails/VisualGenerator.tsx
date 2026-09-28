@@ -2,7 +2,8 @@
 
 import * as React from "react";
 import { cn } from "@allohq/ui";
-import { modeLabel, modePromise } from "@allohq/email-builder";
+import { modeLabel } from "@allohq/email-builder";
+import { ReferenceAssets, type ReferenceAsset } from "./ReferenceAssets";
 
 export type VisualMode = "product_safe" | "creative_concept";
 export type GeneratedVisual = {
@@ -11,6 +12,8 @@ export type GeneratedVisual = {
   url: string;
   assetId: string;
   modeLabel: string;
+  /** Captured by the generation request, never inferred from later selection. */
+  sourceProductId?: string | null;
 };
 export type VisualFailure = { slotId: string; reason: string };
 export type VisualSlotDraft = { id: string; label: string; prompt: string };
@@ -30,13 +33,13 @@ export type VisualCapabilities = {
 /**
  * Asking Joon for email artwork.
  *
- * Four slots, each generated separately and labelled, because a merchant who
+ * One request by default; optional slots are generated separately because a merchant who
  * asks for "a hero, a lifestyle shot, a crop and a backdrop" wants four assets
  * to choose between — not one image with four ideas in it.
  *
  * Mode is an explicit choice rather than something inferred from wording,
- * because the two modes promise different things: one keeps the product
- * exactly as it is, the other is openly an invention.
+ * because the two modes use different inputs: one sends a reference photo
+ * (whose fidelity still needs review), the other is openly an invention.
  */
 export function VisualGenerator({
   mode,
@@ -52,6 +55,11 @@ export function VisualGenerator({
   placementDescription,
   onGenerate,
   onUseAsset,
+  productImageUrl,
+  referenceAssets = [],
+  selectedReferenceId = null,
+  onSelectReference,
+  onClose,
 }: {
   mode: VisualMode;
   setMode: (mode: VisualMode) => void;
@@ -67,8 +75,13 @@ export function VisualGenerator({
   placementDescription?: string | null;
   onGenerate: () => void;
   onUseAsset: (visual: GeneratedVisual) => void;
+  productImageUrl?: string | null;
+  referenceAssets?: ReferenceAsset[];
+  selectedReferenceId?: string | null;
+  onSelectReference?: (id: string | null) => void;
+  onClose?: () => void;
 }) {
-  const productSafeBlocked = mode === "product_safe" && !productHasImage;
+  const productSafeBlocked = mode === "product_safe" && !productHasImage && !selectedReferenceId;
   const nothingToDo = slots.every((slot) => !slot.prompt.trim());
   const unavailable = capabilities ? !capabilities.generationAvailable : false;
   // Storage and provider fail for different reasons and need different copy.
@@ -77,9 +90,13 @@ export function VisualGenerator({
 
   return (
     <section className="p-4">
-      <h3 className="text-[12px] font-medium">Generate visuals</h3>
+      <div className="flex items-center justify-between gap-2"><h3 className="text-[14px] font-medium">Generate a campaign picture</h3>{onClose ? <button type="button" onClick={onClose} disabled={pending} className="text-[12px] text-[#2D4F9E] underline underline-offset-2">Library or upload</button> : null}</div>
 
-      <div className="mt-3" role="radiogroup" aria-labelledby="visual-mode-label">
+      {productTitle ? <div className="mt-3 flex items-center gap-3 rounded-lg bg-[#F4F2EC] p-2">
+        {productImageUrl ? <img src={productImageUrl} alt={productTitle} className="h-16 w-16 bg-white object-contain" /> : null}
+        <div className="min-w-0"><p className="text-[12px] text-muted-foreground">Shopify reference</p><p className="text-[13px] font-medium">{productTitle}</p><p className="mt-1 text-[12px] leading-5 text-muted-foreground">This photo is sent with your request. Review the result for product fidelity before using it.</p></div>
+      </div> : null}
+      {!productTitle ? <div className="mt-3" role="radiogroup" aria-labelledby="visual-mode-label">
         <p className="mb-1.5 text-[11px] font-medium text-muted-foreground" id="visual-mode-label">
           What kind of image
         </p>
@@ -88,6 +105,7 @@ export function VisualGenerator({
             <button
               key={option}
               type="button"
+              disabled={pending}
               role="radio"
               aria-checked={mode === option}
               onClick={() => setMode(option)}
@@ -102,22 +120,24 @@ export function VisualGenerator({
             </button>
           ))}
         </div>
-        <p className="mt-1.5 text-[11px] text-muted-foreground">{modePromise(mode)}</p>
+        <p className="mt-1.5 text-[12px] leading-5 text-muted-foreground">{mode === "product_safe"
+          ? "Your reference photo is sent to an image-capable model. Review the generated picture against the source; it is not guaranteed to reproduce every product detail."
+          : "Illustrative campaign art. No product reference is sent in this mode; an invented product must not be presented as your actual product."}</p>
         {mode === "product_safe" && capabilities ? (
           <p className="mt-1.5 text-[11px] text-muted-foreground">
             {capabilities.referenceGrounded
-              ? `Your product image is sent to ${capabilities.provider} as a reference, so the product in the scene is yours.`
-              : "No reference-capable provider is configured, so Joon generates the setting and places your product image into it afterwards."}
+              ? `Your reference image is sent to ${capabilities.provider}. Check that the output keeps the right product.`
+              : "A reference-capable model is required. Joon will refuse rather than quietly invent your product."}
           </p>
         ) : null}
         {mode === "creative_concept" ? (
           <p className="mt-1.5 rounded-lg border border-[var(--attention,#C99116)]/40 bg-[var(--attention-soft,#FFF0B8)] p-2 text-[11px]">
-            Joon’s current image providers cannot take your product photo as a
-            reference, so a board, bottle or jar drawn here is invented. For the
-            real product in a new setting, use “{modeLabel("product_safe")}”.
+            A board, bottle or jar drawn without a reference is invented. For
+            your product in a new setting, use “{modeLabel("product_safe")}”.
           </p>
         ) : null}
-      </div>
+      </div> : null}
+      {!productTitle && onSelectReference ? <ReferenceAssets assets={referenceAssets} selectedId={selectedReferenceId} onSelect={onSelectReference} disabled={pending} /> : null}
 
       {storageBlocked ? (
         <p className="mt-3 rounded-lg border border-[#B95849]/40 bg-[#FAE8E4] p-2.5 text-[12px]">
@@ -139,22 +159,24 @@ export function VisualGenerator({
       {productSafeBlocked ? (
         <p className="mt-3 rounded-lg border border-[var(--attention,#C99116)]/40 bg-[var(--attention-soft,#FFF0B8)] p-2.5 text-[12px]">
           {productTitle
-            ? `${productTitle} has no image in Shopify, so there is nothing to composite. Pick a product with an image, or switch to a generated concept.`
-            : "Bind a product with an image in the Shopify tab, or switch to a generated concept."}
+            ? `${productTitle} has no image in Shopify. Pick a product with an image, or switch to a generated concept.`
+            : "Choose a reference photo or a Shopify product before generating from it."}
         </p>
       ) : null}
 
       <div className="mt-4 space-y-2">
         <p className="text-[11px] font-medium text-muted-foreground">
-          Up to four visuals, each generated separately
+          {slots.length === 1 ? "Describe this picture" : "Up to four visuals, each generated separately"}
         </p>
         {slots.map((slot, index) => (
           <div key={slot.id}>
             <label className="mb-1 block text-[11px]" htmlFor={`visual-slot-${slot.id}`}>
               {slot.label}
             </label>
-            <input
+            <textarea
               id={`visual-slot-${slot.id}`}
+              disabled={pending}
+              rows={slots.length === 1 ? 3 : 2}
               value={slot.prompt}
               onChange={(event) => {
                 const next = [...slots];
@@ -162,7 +184,7 @@ export function VisualGenerator({
                 setSlots(next);
               }}
               placeholder="Describe this one…"
-              className="w-full rounded-lg border border-border bg-transparent px-2.5 py-1.5 text-[13px] outline-none focus:border-[var(--evidence,#2D4F9E)]"
+              className="w-full resize-y rounded-lg border border-border bg-transparent px-2.5 py-2 text-[14px] leading-5 outline-none focus:border-[var(--evidence,#2D4F9E)]"
             />
           </div>
         ))}
@@ -176,10 +198,10 @@ export function VisualGenerator({
       <button
         type="button"
         onClick={onGenerate}
-        disabled={pending || productSafeBlocked || nothingToDo || unavailable || spendBlocked}
+        disabled={pending || productSafeBlocked || nothingToDo || unavailable || storageBlocked || spendBlocked}
         className="mt-3 w-full rounded-lg bg-[#17204D] px-3 py-2 text-[13px] font-medium text-white disabled:opacity-40"
       >
-        {pending ? "Generating…" : "Generate visuals"}
+        {pending ? "Generating…" : slots.length === 1 ? "Generate picture" : "Generate visuals"}
       </button>
 
       {results.length ? (

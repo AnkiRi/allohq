@@ -25,6 +25,8 @@ export interface ImageBlock {
     href?: string;
     align?: "left" | "center" | "right";
     fullWidth?: boolean;
+    /** Explicit Shopify reference for generated artwork, not a product photo override. */
+    sourceProductId?: string;
   };
 }
 
@@ -53,6 +55,9 @@ export interface ButtonBlock {
     borderRadius?: number;
     align?: "left" | "center" | "right";
     fullWidth?: boolean;
+    fontSize?: number;
+    paddingX?: number;
+    paddingY?: number;
   };
 }
 

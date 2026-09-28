@@ -15,6 +15,23 @@ import { containToScope, scopeViolation, type EmailEditScope, type ModelChangeSe
 
 type Block = { id: string; type: string; props: Record<string, unknown> };
 
+/** Only properties the delivery renderer actually consumes may become a suggestion. */
+export const EMAIL_EDITABLE_PROPS: Record<string, readonly string[]> = {
+  hero: ["heading", "subtext", "buttonText", "align"],
+  text: ["html", "fontSize", "align"],
+  image: ["alt", "width", "align"],
+  button: ["text", "align", "fullWidth", "fontSize", "paddingX", "paddingY", "bgColor", "textColor", "borderRadius"],
+  product: ["showImage", "showPrice", "showDescription", "buttonText"],
+  product_grid: ["columns", "showPrice", "showDescription", "dynamicProductCount", "collectionLimit"],
+  spacer: ["height"],
+  divider: ["color", "thickness", "margin"],
+  countdown: ["label", "endDate"],
+  testimonial: ["quote", "author", "rating"],
+  icon_row: ["items"],
+  social: ["links"],
+  custom_html: ["html", "label"],
+};
+
 /**
  * Props the model may never write.
  *
@@ -228,7 +245,19 @@ export function planEmailChange(input: {
 
   const laned = applyLane(input.lane, containToScope(input.scope, changeSet));
   const { changes: contained, stripped } = stripInventedFacts(input.original, laned);
-  const change = applyChangeSet(input.original, contained, input.idSeed);
+  const types = new Map(input.original.map((block) => [block.id, block.type]));
+  const supported = { ...contained };
+  let unsupported = false;
+  if (contained.blocks) supported.blocks = Object.fromEntries(Object.entries(contained.blocks).flatMap(([id, props]) => {
+    const allowed = EMAIL_EDITABLE_PROPS[types.get(id) ?? ""] ?? [];
+    const entries = Object.entries(props).filter(([key]) => {
+      if (allowed.includes(key)) return true;
+      unsupported = true;
+      return false;
+    });
+    return entries.length ? [[id, Object.fromEntries(entries)]] : [];
+  }));
+  const change = applyChangeSet(input.original, supported, input.idSeed);
   const changed = change.applied && (
     !isDeepStrictEqual(change.blocks, input.original) ||
     (change.subject !== undefined && change.subject !== input.subject) ||
@@ -239,7 +268,9 @@ export function planEmailChange(input: {
       ok: false,
       reason: stripped.length
         ? `Joon cannot set product facts or link destinations — those come from your store. Pick the ${stripped[0]!.blockType === "product_grid" ? "collection" : "product"} in the Shopify data tab and ask again.`
-        : "joon didn't change anything — try rephrasing.",
+        : unsupported
+          ? "That request does not change a supported control on this block. Use its content and sizing controls, or replace it with another block."
+          : "Joon did not change the email. Nothing was proposed; try a more specific instruction.",
     };
   }
 

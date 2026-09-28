@@ -20,3 +20,10 @@ test("canvas blocks can be selected with Enter or Space", () => {
   assert.match(markup, /event\.key!==&#x27;Enter&#x27;/);
   assert.match(markup, /joon-email-block-select/);
 });
+
+test("preview height uses a natural content wrapper, not the iframe viewport", () => {
+  const markup = renderToStaticMarkup(createElement(EmailPreviewFrame, { html }));
+  assert.match(markup, /joon-email-content/);
+  assert.match(markup, /content\.getBoundingClientRect/);
+  assert.doesNotMatch(markup, /b\.scrollHeight/);
+});
