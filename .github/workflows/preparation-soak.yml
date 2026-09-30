@@ -1,0 +1,182 @@
+name: Preparation memory soak
+
+# Opt-in only: never on a pull request or a push to main. Keeps ONE worker
+# process alive through many moderate campaign preparations (several tenants,
+# lease loss with sweeper recovery, duplicate deliveries) and reports the
+# post-GC heap, resident and external memory trend, plus a canary phase that
+# proves the detector sees deliberately retained per-cycle data.
+#
+# Sized for a standard runner: by default 3 tenants x 20,000 customers,
+# 60 cycles plus a 20-cycle canary. It does not repeat the 5 x 1M proof.
+#
+# Synthetic tenants, disposable Postgres, no provider. No Shopify, no Resend,
+# no SES, no Railway, no production database, no real recipients.
+on:
+  workflow_dispatch:
+    inputs:
+      cycles:
+        description: "Soak cycles (50-100; fewer is a rehearsal)"
+        required: false
+        default: "60"
+      tenants:
+        description: "Tenants prepared at once in every cycle"
+        required: false
+        default: "3"
+      size:
+        description: "Customers per tenant"
+        required: false
+        default: "20000"
+  push:
+    branches: ["soak-proof/**"]
+
+concurrency:
+  group: preparation-soak
+  cancel-in-progress: false
+
+jobs:
+  soak:
+    name: One worker process, many preparation cycles — memory trend and canary
+    runs-on: ubuntu-latest
+    timeout-minutes: 200
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: joon
+          POSTGRES_PASSWORD: joon
+          POSTGRES_DB: joon_soak_test
+        ports: ["5432:5432"]
+        options: >-
+          --shm-size=1g
+          --health-cmd "pg_isready -U joon -d joon_soak_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: "postgresql://joon:joon@127.0.0.1:5432/joon_soak_test"
+      TEST_DATABASE_URL: "postgresql://joon:joon@127.0.0.1:5432/joon_soak_test"
+      SOAK_CYCLES: ${{ github.event.inputs.cycles || '60' }}
+      SOAK_TENANTS: ${{ github.event.inputs.tenants || '3' }}
+      SOAK_SIZE: ${{ github.event.inputs.size || '20000' }}
+      SOAK_CSV: /tmp/soak-cycles.csv
+      NODE_OPTIONS: "--expose-gc"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Refuse to run against anything but a disposable database
+        run: node scripts/assert-disposable-database-cli.mjs
+
+      - name: Refuse to start without room to finish
+        # Measured in rehearsal: about 1 KB of database per prepared audience
+        # member, plus 2,847 bytes per seeded customer. Twice that is the floor.
+        run: |
+          members=$(( (SOAK_CYCLES + 20) * SOAK_TENANTS * SOAK_SIZE ))
+          need_gb=$(( ((members * 1000) + (SOAK_TENANTS * SOAK_SIZE * 2847)) * 2 / 1000000000 + 1 ))
+          free_gb=$(df -BG --output=avail / | tail -1 | tr -dc '0-9')
+          echo "audience rows: $members  disk needed: ~${need_gb} GB  disk free: ${free_gb} GB"
+          [ "$free_gb" -ge "$need_gb" ] || { echo "::error::Not enough disk (${free_gb} GB free, ~${need_gb} GB needed)"; exit 1; }
+          free -h; nproc
+
+      - name: Apply migrations to the disposable database
+        run: pnpm --filter @allohq/database exec prisma migrate deploy
+
+      - name: Start resource sampler
+        env:
+          PG_CONTAINER: ${{ job.services.postgres.id }}
+        run: |
+          cat > /tmp/sample.sh <<'EOF'
+          #!/usr/bin/env bash
+          echo "time,runner_used_mb,runner_available_mb,swap_used_mb,disk_free_gb,postgres_mb,node_rss_mb,load_1m,database_mb" > /tmp/resources.csv
+          while true; do
+            now=$(date -u +%H:%M:%S)
+            read -r total avail swap_total swap_free < <(awk '/^MemTotal/{t=$2} /^MemAvailable/{a=$2} /^SwapTotal/{st=$2} /^SwapFree/{sf=$2} END {print t, a, st, sf}' /proc/meminfo)
+            used=$(( (total - avail) / 1024 )); available=$(( avail / 1024 )); swap=$(( (swap_total - swap_free) / 1024 ))
+            disk=$(df -BG --output=avail / | tail -1 | tr -dc '0-9')
+            pg=$(docker stats --no-stream --format '{{.MemUsage}}' "$PG_CONTAINER" 2>/dev/null | awk '{v=$1; u=v; gsub(/[0-9.]/, "", u); gsub(/[A-Za-z]/, "", v); m = (u == "GiB") ? 1024 : (u == "MiB") ? 1 : (u == "KiB") ? 1/1024 : 0; printf "%d", v * m}')
+            node=$(ps -eo rss=,args= 2>/dev/null | awk '{n = split($2, part, "/"); if (part[n] == "node") s += $1} END {printf "%d", s / 1024}')
+            load=$(cut -d' ' -f1 /proc/loadavg)
+            db=$(PGPASSWORD=joon psql -h 127.0.0.1 -U joon -d joon_soak_test -tAc "SELECT pg_database_size(current_database()) / 1048576" 2>/dev/null)
+            echo "$now,$used,$available,$swap,$disk,$pg,$node,$load,$db" >> /tmp/resources.csv
+            sleep 15
+          done
+          EOF
+          chmod +x /tmp/sample.sh
+          nohup /tmp/sample.sh > /dev/null 2>&1 &
+          echo $! > /tmp/sampler.pid
+
+      - name: Preparation soak
+        timeout-minutes: 180
+        shell: bash
+        run: |
+          set +e
+          pnpm --filter @allohq/workers exec tsx --test src/workers/preparation-soak.load.integration.ts 2>&1 | tee /tmp/soak.log
+          code=${PIPESTATUS[0]}
+          echo "$code" > /tmp/soak-exit
+          exit "$code"
+
+      - name: Resource record and verdict
+        if: always()
+        shell: bash
+        run: |
+          kill "$(cat /tmp/sampler.pid 2>/dev/null)" 2>/dev/null || true
+          peaks=$(awk -F, 'NR > 1 && $2 != "" {
+              if ($2 > ru) ru = $2; if (ra == "" || $3 < ra) ra = $3; if ($4 > sw) sw = $4;
+              if (df == "" || $5 < df) df = $5; if ($6 > pg) pg = $6; if ($7 > nd) nd = $7;
+              if ($8 > ld) ld = $8; if ($9 > db) db = $9; n++ }
+            END { printf "%d %d %d %d %d %d %s %d %d", ru, ra, sw, df, pg, nd, ld + 0, db, n }' /tmp/resources.csv 2>/dev/null)
+          read -r runner_used runner_min_available swap disk_min pg_peak node_peak load_peak db_peak samples <<< "$peaks"
+          oom=$(sudo dmesg 2>/dev/null | grep -ciE "out of memory|oom-kill|killed process" || true)
+          exit_code=$(cat /tmp/soak-exit 2>/dev/null || echo none)
+          verdict=$(grep -oE "=== PREPARATION SOAK: .* ===" /tmp/soak.log 2>/dev/null | tail -1)
+          if [ "$exit_code" = "0" ]; then result="COMPLETED — ${verdict}"
+          elif [ -n "$verdict" ]; then result="COMPLETED, CHECKS FAILED — ${verdict}; see the log"
+          elif [ "${oom:-0}" -gt 0 ]; then result="RESOURCE-LIMITED — the kernel killed a process for memory; inconclusive"
+          elif [ "$exit_code" = "none" ]; then result="TIME-LIMITED — cut off before finishing; inconclusive"
+          else result="INCONCLUSIVE — the harness stopped (exit ${exit_code}); see the log"; fi
+          {
+            echo "## ${result}"
+            echo
+            echo '```'
+            sed -n '/=== PREPARATION SOAK/,/canary heap/p' /tmp/soak.log
+            echo '```'
+            echo
+            echo "| Peak resource | Value |"
+            echo "|---|---|"
+            echo "| Runner memory used (peak) | ${runner_used:-?} MB |"
+            echo "| Runner memory available (lowest) | ${runner_min_available:-?} MB |"
+            echo "| Swap used (peak) | ${swap:-?} MB |"
+            echo "| Postgres working memory (peak sampled) | ${pg_peak:-?} MB |"
+            echo "| All Node processes, resident (peak) | ${node_peak:-?} MB |"
+            echo "| Load average, 1 min (peak; $(nproc) CPUs) | ${load_peak:-?} |"
+            echo "| Database size (peak) | ${db_peak:-?} MB |"
+            echo "| Disk free (lowest) | ${disk_min:-?} GB |"
+            echo "| Samples | ${samples:-0} at 15 s |"
+            echo "| Kernel OOM events | ${oom:-0} |"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: preparation-soak-${{ github.run_id }}
+          path: |
+            /tmp/soak-cycles.csv
+            /tmp/resources.csv
+            /tmp/soak.log
+          if-no-files-found: warn
+          retention-days: 30
